@@ -1,5 +1,5 @@
 """
-Branded combo recommendation engine v5.1 (Fuzzy Matching & String Normalization)
+Branded combo recommendation engine v5.4
 """
 from __future__ import annotations
 
@@ -8,13 +8,12 @@ import re
 import sqlite3
 import difflib
 from collections import Counter
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Sequence
 
 def normalize(s: Any) -> str:
     s = str(s)
-    # 공백, &, ＆, [, ], -, _ 등 텍스트 불일치를 유발하는 모든 문자를 제거하고 소문자로 통일
     return re.sub(r"[\[\]\s\&＆\-\_]+", "", s).lower()
 
 def load_data(path: str | Path) -> list:
@@ -35,7 +34,6 @@ def canonicalize_card(card: str, name_index: Dict[str, str]) -> str:
     if key in name_index:
         return name_index[key]
     
-    # 수정점 4: 오타 보정 (일치율 80% 이상 매핑)
     best_match = None
     highest_ratio = 0.0
     for known_key in name_index.keys():
@@ -84,6 +82,7 @@ class YdkDeck:
     extra_names: List[str]
     side_names: List[str]
     unresolved_ids: List[str]
+    full_db: Dict[str, str] = field(default_factory=dict) # 전체 DB 추가
 
 def parse_ydk_entries(path: str | Path) -> List[YdkEntry]:
     entries: List[YdkEntry] = []
@@ -175,7 +174,8 @@ def load_ydk(path: str | Path, data: list, cdb_paths: Optional[Sequence[str | Pa
         path=str(path),
         main_ids=[e.passcode for e in main_e], extra_ids=[e.passcode for e in extra_e], side_ids=[e.passcode for e in side_e],
         main_names=resolve(main_e), extra_names=resolve(extra_e), side_names=resolve(side_e),
-        unresolved_ids=unresolved
+        unresolved_ids=unresolved,
+        full_db=id_to_name
     )
 
 @dataclass
@@ -198,6 +198,7 @@ def recommend(
     prioritize_lock: bool = False,
     prioritize_cont: bool = False,
     exclude_old: bool = False,
+    no_extra_cost: bool = False,
 ) -> Tuple[List[Recommendation], List[Recommendation]]:
     
     name_index = build_name_index(data)
@@ -220,28 +221,24 @@ def recommend(
         if exclude_old and "구식" in tags:
             continue
 
-        # 1. 필요 파츠 (패) 확인
         required_hand = combo.get("필요한 파츠", {})
         for req_name, req_cnt in required_hand.items():
             c_name = canonicalize_card(req_name, name_index)
             if hand_counter[c_name] < req_cnt:
                 reasons.append(f"패 부족: {req_name}({req_cnt}장 필요)")
 
-        # 2. 메인 덱 투입 확인
         req_main = combo.get("전개 중 필요한 메인 덱 카드", {})
         for req_name, req_cnt in req_main.items():
             c_name = canonicalize_card(req_name, name_index)
             if main_counter[c_name] < req_cnt:
                 reasons.append(f"메인 덱 투입 부족: {req_name}(현재 {main_counter[c_name]}장, 필요 {req_cnt}장)")
 
-        # 3. 엑스트라 덱 확인
         req_extra = combo.get("전개 중 필요한 엑스트라 덱 카드", {})
         for req_name, req_cnt in req_extra.items():
             c_name = canonicalize_card(req_name, name_index)
             if extra_counter[c_name] < req_cnt:
                 reasons.append(f"엑스트라 덱 부족: {req_name}(현재 {extra_counter[c_name]}장, 필요 {req_cnt}장)")
 
-        # 4. 반드시 덱에 있어야만 하는 카드 (패에 잡히면 안 됨)
         req_must = combo.get("반드시 덱에 있어야만 하는 카드", {})
         for req_name, req_cnt in req_must.items():
             c_name = canonicalize_card(req_name, name_index)
@@ -249,11 +246,13 @@ def recommend(
             if available < req_cnt:
                 reasons.append(f"호감 파츠 패에 잡힘: {req_name}(덱 잔여 {available}장, 필요 {req_cnt}장)")
 
-        # 5. 추가 소모패 확인
         cost = int(combo.get("추가 소모패", 0))
         total_needed_hand_cards = sum(required_hand.values()) + cost
         if len(hand_list) < total_needed_hand_cards:
             reasons.append(f"총 패 장수 부족 (필요: {total_needed_hand_cards}, 현재: {len(hand_list)})")
+
+        if no_extra_cost and cost > 0:
+            reasons.append(f"조건 미달: 추가 코스트 발생({cost}장)")
 
         disruptions = float(combo.get("견제 수", {}).get("시스템 수치", 0.0))
         disrupt_disp = combo.get("견제 수", {}).get("표시", str(disruptions))
@@ -279,4 +278,6 @@ def recommend(
             valid_candidates.append(rec)
 
     valid_candidates.sort(key=lambda r: (r.priority_score, r.disruptions, -r.cost), reverse=True)
+    failed_candidates.sort(key=lambda r: (len(r.missing_reasons), -r.disruptions))
+    
     return valid_candidates[:top_n], failed_candidates

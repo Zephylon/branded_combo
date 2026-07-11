@@ -1,15 +1,14 @@
 """
-Tkinter GUI for the Branded combo recommender v5.1 (Clipboard Ctrl+V Integration)
+Tkinter GUI for the Branded combo recommender v5.4
 """
 from __future__ import annotations
 
-import json
 import random
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
-from PIL import ImageGrab # 클립보드 이미지 캡처용
+from PIL import ImageGrab
 
 try:
     from PIL import Image, ImageTk
@@ -17,19 +16,49 @@ except Exception:
     Image = None
     ImageTk = None
 
+# 버전 5.4 엔진 임포트
 try:
-    from branded_combo_engine_v5_1 import load_data, load_ydk, recommend, split_card_lines, normalize
+    from branded_combo_engine_v5_4 import load_data, load_ydk, recommend, split_card_lines, normalize
 except Exception as e:
-    raise SystemExit(f"branded_combo_engine_v5_1.py 파일을 같은 폴더에 두세요. Import error: {e}")
+    raise SystemExit(f"branded_combo_engine_v5_4.py 파일을 같은 폴더에 두세요. Import error: {e}")
 
 APP_DIR = Path(__file__).resolve().parent
 CARD_W = 92
 CARD_H = 134
 
+class ToolTip:
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.widget.bind("<Enter>", self.enter)
+        self.widget.bind("<Leave>", self.close)
+        self.tw = None
+        
+    def enter(self, event=None):
+        x = y = 0
+        x, y, cx, cy = self.widget.bbox("insert")
+        x += self.widget.winfo_rootx() + 25
+        y += self.widget.winfo_rooty() + 20
+        
+        self.tw = tk.Toplevel(self.widget)
+        self.tw.wm_overrideredirect(True)
+        self.tw.wm_geometry(f"+{x}+{y}")
+        
+        label = tk.Label(self.tw, text=self.text, justify='left',
+                       background="#ffffe0", relief='solid', borderwidth=1,
+                       font=("Malgun Gothic", 9))
+        label.pack(ipadx=10, ipady=5)
+        
+    def close(self, event=None):
+        if self.tw:
+            self.tw.destroy()
+            self.tw = None
+
+
 class BrandedComboApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("낙인 전개 추천기 v5.1")
+        self.title("낙인 전개 추천기 v5.4")
         self.geometry("1240x820")
         self.data = []
         self.deck = None
@@ -43,7 +72,6 @@ class BrandedComboApp(tk.Tk):
         self._build_ui()
         self._auto_load_data()
         
-        # 수정점 5: 프로그램 전역에 Ctrl+V (붙여넣기) 단축키 바인딩
         self.bind("<Control-v>", self._on_global_paste)
         self.bind("<Control-V>", self._on_global_paste)
 
@@ -62,7 +90,7 @@ class BrandedComboApp(tk.Tk):
         root = ttk.Frame(self, padding=14)
         root.pack(fill="both", expand=True)
 
-        ttk.Label(root, text="낙인 전개 추천기 v5.1", style="Title.TLabel").pack(anchor="w", pady=(0, 10))
+        ttk.Label(root, text="낙인 전개 추천기 v5.4", style="Title.TLabel").pack(anchor="w", pady=(0, 10))
 
         paned = ttk.PanedWindow(root, orient=tk.HORIZONTAL)
         paned.pack(fill="both", expand=True)
@@ -76,13 +104,7 @@ class BrandedComboApp(tk.Tk):
         self._build_right(right)
 
     def _build_left(self, parent):
-        ttk.Label(parent, text="1. 데이터 / 덱리 (YDK)", style="CardTitle.TLabel").pack(anchor="w")
-
-        data_row = ttk.Frame(parent, style="Card.TFrame")
-        data_row.pack(fill="x", pady=4)
-        self.data_path_var = tk.StringVar()
-        ttk.Entry(data_row, textvariable=self.data_path_var, width=38).pack(side="left", fill="x", expand=True)
-        ttk.Button(data_row, text="JSON 불러오기", command=self._browse_data).pack(side="left", padx=5)
+        ttk.Label(parent, text="1. 덱리 (YDK) 연동", style="CardTitle.TLabel").pack(anchor="w")
 
         ydk_row = ttk.Frame(parent, style="Card.TFrame")
         ydk_row.pack(fill="x", pady=4)
@@ -95,7 +117,7 @@ class BrandedComboApp(tk.Tk):
         ttk.Button(btn_row, text="CDB 폴더 추가", command=self._add_cdb_folder).pack(side="left")
         ttk.Button(btn_row, text="YDK 새로고침", command=self._load_ydk).pack(side="left", padx=5)
 
-        self.deck_status = tk.StringVar(value="YDK를 불러와주세요.")
+        self.deck_status = tk.StringVar(value="yugioh_branded_combos.json 로드 대기 중...")
         ttk.Label(parent, textvariable=self.deck_status, wraplength=360).pack(anchor="w", pady=(0, 10))
 
         ttk.Separator(parent).pack(fill="x", pady=8)
@@ -103,30 +125,41 @@ class BrandedComboApp(tk.Tk):
         hand_header_row = ttk.Frame(parent, style="Card.TFrame")
         hand_header_row.pack(fill="x", pady=(0, 4))
         ttk.Label(hand_header_row, text="2. 패 5장 입력", style="CardTitle.TLabel").pack(side="left")
-        
-        # 버튼 명칭 및 힌트 수정
         ttk.Button(hand_header_row, text="클립보드 인식 (베타)", command=self._process_clipboard_image).pack(side="right")
         ttk.Button(hand_header_row, text="무작위 뽑기", command=self._draw_random_hand).pack(side="right", padx=(0, 5))
 
         self.hand_text = ScrolledText(parent, height=6, font=("Malgun Gothic", 10))
         self.hand_text.pack(fill="x", pady=4)
         self.hand_text.insert("1.0", "천저의 사도\n혁의 성녀 카르테시아\n비스테드 살로니르\n하루 우라라\n무한포영")
-        
         ttk.Label(parent, text="💡 Tip: 캡처 도구(Win+Shift+S)로 패를 캡처 후 여기서 Ctrl+V를 누르세요!", style="Small.TLabel").pack(anchor="w", pady=(2,4))
 
         ttk.Separator(parent).pack(fill="x", pady=8)
 
-        ttk.Label(parent, text="3. 추천 필터 및 가중치", style="CardTitle.TLabel").pack(anchor="w")
+        filter_header = ttk.Frame(parent, style="Card.TFrame")
+        filter_header.pack(fill="x", pady=(0, 4))
+        ttk.Label(filter_header, text="3. 추천 필터 및 가중치", style="CardTitle.TLabel").pack(side="left")
+        
+        help_btn = tk.Label(filter_header, text=" ? ", font=("Arial", 9, "bold"), bg="#e0e0e0", fg="#333", cursor="question_arrow")
+        help_btn.pack(side="left", padx=5)
+        
+        help_text = (
+            "• 락: 상대 필드에 몬스터를 소환시켜 특수 소환 락을 거는 방법\n"
+            "• 지속: 낙인의 에튀드 등 지속 함정 등으로 상대에게 불이익을 강요하는 방식\n"
+            "• 구식: 신규 낙인 지원이 나오기 이전의 전개 방법"
+        )
+        ToolTip(help_btn, help_text)
         
         self.tag_lock = tk.BooleanVar()
         self.tag_cont = tk.BooleanVar()
         self.tag_no_old = tk.BooleanVar()
+        self.tag_no_cost = tk.BooleanVar()
         
         opts = ttk.Frame(parent, style="Card.TFrame")
         opts.pack(fill="x", pady=4)
         ttk.Checkbutton(opts, text="우선 추천: 락", variable=self.tag_lock).pack(anchor="w")
         ttk.Checkbutton(opts, text="우선 추천: 지속", variable=self.tag_cont).pack(anchor="w")
         ttk.Checkbutton(opts, text="제외: 구식 태그", variable=self.tag_no_old).pack(anchor="w")
+        ttk.Checkbutton(opts, text="조건: 추가 코스트 X", variable=self.tag_no_cost).pack(anchor="w")
 
         top_row = ttk.Frame(parent, style="Card.TFrame")
         top_row.pack(fill="x", pady=4)
@@ -164,16 +197,13 @@ class BrandedComboApp(tk.Tk):
     def _auto_load_data(self):
         p = APP_DIR / "yugioh_branded_combos.json" 
         if p.exists():
-            self.data_path_var.set(str(p))
             try:
                 self.data = load_data(p)
-            except: pass
-
-    def _browse_data(self):
-        p = filedialog.askopenfilename(filetypes=[("JSON", "*.json")])
-        if p:
-            self.data_path_var.set(p)
-            self.data = load_data(p)
+                self.deck_status.set("✅ 데이터(JSON) 로드 완료. 덱리(YDK)를 불러와주세요.")
+            except Exception as e: 
+                messagebox.showerror("데이터 오류", f"JSON 파싱 실패:\n{e}")
+        else:
+            self.deck_status.set("⚠️ yugioh_branded_combos.json 파일이 없습니다!")
 
     def _browse_ydk(self):
         p = filedialog.askopenfilename(filetypes=[("YDK", "*.ydk")])
@@ -215,17 +245,15 @@ class BrandedComboApp(tk.Tk):
         self.hand_text.insert("1.0", "\n".join(sampled))
 
     def _on_global_paste(self, event=None):
-        """단축키 Ctrl+V 가 입력되었을 때 호출되는 이벤트 핸들러"""
         try:
             img = ImageGrab.grabclipboard()
-            if img and not isinstance(img, str): # 클립보드에 담긴 게 이미지 파일이라면
+            if img and not isinstance(img, str): 
                 self._run_image_recognition(img)
-                return "break" # 텍스트 컴포넌트의 기본 붙여넣기 동작을 방지
+                return "break" 
         except Exception:
             pass
 
     def _process_clipboard_image(self):
-        """버튼을 직접 클릭했을 때 호출되는 핸들러"""
         try:
             img = ImageGrab.grabclipboard()
             if img and not isinstance(img, str):
@@ -246,7 +274,23 @@ class BrandedComboApp(tk.Tk):
             messagebox.showerror("모듈 부족", "screen_reader.py 모듈이나 opencv-python 라이브러리가 없습니다.")
             return
 
-        main_ids = list(set(self.deck.main_ids))
+        # ---------------------------------------------------------
+        # 신일러/구일러 매칭을 위해 같은 이름의 모든 패스코드를 추출 (핵심 수정)
+        # ---------------------------------------------------------
+        expanded_ids = set()
+        for name in self.deck.main_names:
+            if name.startswith("UNKNOWN:"):
+                continue
+            norm_target = normalize(name)
+            # CDB 전체 DB(full_db)에서 이름이 같은 모든 패스코드를 싹싹 긁어옵니다.
+            for cid, db_name in self.deck.full_db.items():
+                if normalize(db_name) == norm_target:
+                    if str(cid).isdigit():
+                        expanded_ids.add(str(cid))
+                        
+        main_ids = list(expanded_ids)
+        # ---------------------------------------------------------
+
         self.deck_status.set("클립보드 이미지를 분석하고 있습니다...")
         self.update()
 
@@ -258,8 +302,11 @@ class BrandedComboApp(tk.Tk):
                 self.deck_status.set("클립보드 매칭 실패.")
                 return
 
-            id_to_name = {str(cid): name for cid, name in zip(self.deck.main_ids, self.deck.main_names)}
-            matched_names = [id_to_name.get(str(cid), f"UNKNOWN:{cid}") for cid in matched_ids]
+            # 확장된 ID들로부터 다시 원래의 한국어 이름을 찾아옵니다.
+            matched_names = []
+            for cid in matched_ids:
+                found_name = self.deck.full_db.get(str(cid), f"UNKNOWN:{cid}")
+                matched_names.append(found_name)
             
             while len(matched_names) < 5:
                 matched_names.append("인식불가 (수동수정)")
@@ -287,7 +334,8 @@ class BrandedComboApp(tk.Tk):
             top_n=self.top_var.get(),
             prioritize_lock=self.tag_lock.get(),
             prioritize_cont=self.tag_cont.get(),
-            exclude_old=self.tag_no_old.get()
+            exclude_old=self.tag_no_old.get(),
+            no_extra_cost=self.tag_no_cost.get()
         )
         self.recommendations = valid_recs
 
@@ -345,7 +393,6 @@ class BrandedComboApp(tk.Tk):
         for name, count in c.get("필요한 파츠", {}).items():
             self._make_visual_card(name, f"필요 파츠\n({count}장)").pack(side="left", padx=5)
             
-        # 수정점 1: 추가 코스트 매수 수치(rec.cost)만큼 개별적으로 반복 생성하여 배치
         if rec.cost > 0:
             for _ in range(rec.cost):
                 self._make_visual_placeholder("추가 코스트\n(1장)").pack(side="left", padx=5)

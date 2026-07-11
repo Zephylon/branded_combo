@@ -1,6 +1,5 @@
 """
 Screen Reader for YGO Branded Combo Recommender (Korean Path Fix + SIFT)
-- 윈도우 한글 경로 인식 불가 버그를 numpy imdecode를 통해 우회하여 해결한 버전입니다.
 """
 import cv2
 import numpy as np
