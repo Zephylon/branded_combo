@@ -15,8 +15,12 @@
 ![덱 예시](md/deck.png)
 
 본인이 쓰는 덱 레시피, 낙인 샘플2.ypk 샘플 덱입니다.
-어디까지나 샘플이므로, ygopro및 edopro에서 자유롭게 수정하고 사용하면 됩니다. 
+어디까지나 샘플이므로, ygopro및 edopro 등 프로그램에서 자유롭게 수정하고 사용하면 됩니다. 
+
+# 부족한 점
+아직 원핸드 전개만 다루고 있기 때문에 투핸드 전개가 부족하며, 모든 원핸드 전개를 다루고 있지 않기 때문에 부족한 부분이 존재할 수도 있습니다.
+틈틈히 수정해나갈 수 있지만, 업데이트가 오래 이루어지지 않을 수도 있습니다. 
 
 # 출처
 모든 전개 방법은 아래 스프레드 시트에서 가져왔음을 알립니다. 과거에 작성된 시트이기 때문에 현재로는 가짓수도, 전개도 조금 부족할 수 있지만 많은 양질의 자료를 담고있기 때문에 사용했습니다. 
-https://docs.google.com/spreadsheets/d/1wAd11bAIHfDxNm4xgZsI5XTuI_iaBx3CoWjVRN3LirY/edit?gid=1005629851#gid=1005629851
+https://docs.google.com/spreadsheets/d/1wAd11bAIHfDxNm4xgZsI5XTuI_iaBx3CoWjVRN3LirY/edit?gid=1654946768#gid=1654946768
