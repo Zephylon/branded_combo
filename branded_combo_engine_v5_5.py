@@ -1,5 +1,5 @@
 """
-Branded combo recommendation engine v5.4
+Branded combo recommendation engine v5.5
 """
 from __future__ import annotations
 
@@ -82,7 +82,7 @@ class YdkDeck:
     extra_names: List[str]
     side_names: List[str]
     unresolved_ids: List[str]
-    full_db: Dict[str, str] = field(default_factory=dict) # 전체 DB 추가
+    full_db: Dict[str, str] = field(default_factory=dict)
 
 def parse_ydk_entries(path: str | Path) -> List[YdkEntry]:
     entries: List[YdkEntry] = []

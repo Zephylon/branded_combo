@@ -1,5 +1,5 @@
 """
-Tkinter GUI for the Branded combo recommender v5.4
+Tkinter GUI for the Branded combo recommender v5.5
 """
 from __future__ import annotations
 
@@ -16,11 +16,11 @@ except Exception:
     Image = None
     ImageTk = None
 
-# 버전 5.4 엔진 임포트
+# 버전 5.5 엔진 임포트
 try:
-    from branded_combo_engine_v5_4 import load_data, load_ydk, recommend, split_card_lines, normalize
+    from branded_combo_engine_v5_5 import load_data, load_ydk, recommend, split_card_lines, normalize
 except Exception as e:
-    raise SystemExit(f"branded_combo_engine_v5_4.py 파일을 같은 폴더에 두세요. Import error: {e}")
+    raise SystemExit(f"branded_combo_engine_v5_5.py 파일을 같은 폴더에 두세요. Import error: {e}")
 
 APP_DIR = Path(__file__).resolve().parent
 CARD_W = 92
@@ -58,7 +58,7 @@ class ToolTip:
 class BrandedComboApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("낙인 전개 추천기 v5.4")
+        self.title("낙인 전개 추천기 v5.5")
         self.geometry("1240x820")
         self.data = []
         self.deck = None
@@ -90,7 +90,7 @@ class BrandedComboApp(tk.Tk):
         root = ttk.Frame(self, padding=14)
         root.pack(fill="both", expand=True)
 
-        ttk.Label(root, text="낙인 전개 추천기 v5.4", style="Title.TLabel").pack(anchor="w", pady=(0, 10))
+        ttk.Label(root, text="낙인 전개 추천기 v5.5", style="Title.TLabel").pack(anchor="w", pady=(0, 10))
 
         paned = ttk.PanedWindow(root, orient=tk.HORIZONTAL)
         paned.pack(fill="both", expand=True)
@@ -124,11 +124,12 @@ class BrandedComboApp(tk.Tk):
 
         hand_header_row = ttk.Frame(parent, style="Card.TFrame")
         hand_header_row.pack(fill="x", pady=(0, 4))
-        ttk.Label(hand_header_row, text="2. 패 5장 입력", style="CardTitle.TLabel").pack(side="left")
+        # UI 텍스트 수정
+        ttk.Label(hand_header_row, text="2. 현재 패 입력 (최대 9장)", style="CardTitle.TLabel").pack(side="left")
         ttk.Button(hand_header_row, text="클립보드 인식 (베타)", command=self._process_clipboard_image).pack(side="right")
-        ttk.Button(hand_header_row, text="무작위 뽑기", command=self._draw_random_hand).pack(side="right", padx=(0, 5))
+        ttk.Button(hand_header_row, text="무작위 5장 뽑기", command=self._draw_random_hand).pack(side="right", padx=(0, 5))
 
-        self.hand_text = ScrolledText(parent, height=6, font=("Malgun Gothic", 10))
+        self.hand_text = ScrolledText(parent, height=8, font=("Malgun Gothic", 10))
         self.hand_text.pack(fill="x", pady=4)
         self.hand_text.insert("1.0", "천저의 사도\n혁의 성녀 카르테시아\n비스테드 살로니르\n하루 우라라\n무한포영")
         ttk.Label(parent, text="💡 Tip: 캡처 도구(Win+Shift+S)로 패를 캡처 후 여기서 Ctrl+V를 누르세요!", style="Small.TLabel").pack(anchor="w", pady=(2,4))
@@ -240,7 +241,7 @@ class BrandedComboApp(tk.Tk):
             messagebox.showwarning("카드 부족", "메인 덱에 인식된 카드가 5장 미만입니다. CDB 연동을 확인하세요.")
             return
             
-        sampled = random.sample(valid_cards, 5)
+        sampled = random.sample(valid_cards, 5) # 무작위 뽑기는 여전히 스탠다드인 5장을 유지합니다
         self.hand_text.delete("1.0", "end")
         self.hand_text.insert("1.0", "\n".join(sampled))
 
@@ -274,45 +275,40 @@ class BrandedComboApp(tk.Tk):
             messagebox.showerror("모듈 부족", "screen_reader.py 모듈이나 opencv-python 라이브러리가 없습니다.")
             return
 
-        # ---------------------------------------------------------
-        # 신일러/구일러 매칭을 위해 같은 이름의 모든 패스코드를 추출 (핵심 수정)
-        # ---------------------------------------------------------
         expanded_ids = set()
         for name in self.deck.main_names:
             if name.startswith("UNKNOWN:"):
                 continue
             norm_target = normalize(name)
-            # CDB 전체 DB(full_db)에서 이름이 같은 모든 패스코드를 싹싹 긁어옵니다.
             for cid, db_name in self.deck.full_db.items():
                 if normalize(db_name) == norm_target:
                     if str(cid).isdigit():
                         expanded_ids.add(str(cid))
                         
         main_ids = list(expanded_ids)
-        # ---------------------------------------------------------
 
         self.deck_status.set("클립보드 이미지를 분석하고 있습니다...")
         self.update()
 
         try:
-            matched_ids = screen_reader.recognize_hand_from_image(pil_image, main_ids, self.pics_dirs)
+            matched_ids = screen_reader.recognize_hand_from_image(pil_image, main_ids, self.pics_dirs) # 기본값 최대 9장 사용
             
             if not matched_ids:
                 messagebox.showinfo("결과 없음", "이미지에서 일치하는 카드를 찾지 못했습니다.\n캡처 구역이 정확한지 혹은 pics 매핑을 확인하세요.")
                 self.deck_status.set("클립보드 매칭 실패.")
                 return
 
-            # 확장된 ID들로부터 다시 원래의 한국어 이름을 찾아옵니다.
             matched_names = []
             for cid in matched_ids:
                 found_name = self.deck.full_db.get(str(cid), f"UNKNOWN:{cid}")
                 matched_names.append(found_name)
             
+            # 최소 5장 패딩 로직 유지 (9장까지 인식되면 모두 표기)
             while len(matched_names) < 5:
                 matched_names.append("인식불가 (수동수정)")
                 
             self.hand_text.delete("1.0", "end")
-            self.hand_text.insert("1.0", "\n".join(matched_names[:5]))
+            self.hand_text.insert("1.0", "\n".join(matched_names))
             self.deck_status.set(f"클립보드 이미지 매칭 완료! ({len(matched_ids)}장 식별)")
             
         except Exception as e:
@@ -325,8 +321,13 @@ class BrandedComboApp(tk.Tk):
             return
 
         hand = split_card_lines(self.hand_text.get("1.0", "end"))
-        if len(hand) != 5:
-            if not messagebox.askyesno("패 확인", f"{len(hand)}장 입력됨. 진행할까요?"):
+        
+        # 5장 제한 경고 로직을 완화
+        if len(hand) < 1:
+            messagebox.showwarning("패 확인", "패를 1장 이상 입력해주세요.")
+            return
+        if len(hand) < 5:
+            if not messagebox.askyesno("패 확인", f"패가 {len(hand)}장만 입력되었습니다. 이대로 진행할까요?"):
                 return
 
         valid_recs, failed_recs = recommend(

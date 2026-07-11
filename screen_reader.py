@@ -1,5 +1,5 @@
 """
-Screen Reader for YGO Branded Combo Recommender (Korean Path Fix + SIFT)
+Screen Reader for YGO Branded Combo Recommender (Up to 9 cards support)
 """
 import cv2
 import numpy as np
@@ -13,11 +13,9 @@ def get_card_image_path(cid, pics_dirs):
                 return str(p)
     return None
 
-def recognize_hand_from_image(pil_image, main_ids, pics_dirs, expected_cards=5):
-    # PIL 이미지를 OpenCV용 numpy 배열로 변환
+def recognize_hand_from_image(pil_image, main_ids, pics_dirs, expected_cards=9):
     screen_np = np.array(pil_image)
     
-    # 알파 채널(RGBA) 예외 처리 후 그레이스케일 변환
     if len(screen_np.shape) == 3:
         if screen_np.shape[2] == 4:
             screen_gray = cv2.cvtColor(screen_np, cv2.COLOR_RGBA2GRAY)
@@ -26,7 +24,6 @@ def recognize_hand_from_image(pil_image, main_ids, pics_dirs, expected_cards=5):
     else:
         screen_gray = screen_np
 
-    # SIFT 알고리즘 초기화
     sift = cv2.SIFT_create()
     kp_screen, des_screen = sift.detectAndCompute(screen_gray, None)
 
@@ -42,7 +39,6 @@ def recognize_hand_from_image(pil_image, main_ids, pics_dirs, expected_cards=5):
         if not img_path:
             continue
             
-        # [핵심 수정] 한글 경로 문제 해결: numpy로 바이너리 데이터를 먼저 읽은 후 cv2로 디코딩
         img_array = np.fromfile(img_path, np.uint8)
         if img_array.size == 0:
             continue
@@ -51,7 +47,6 @@ def recognize_hand_from_image(pil_image, main_ids, pics_dirs, expected_cards=5):
         if template is None:
             continue
             
-        # 마스터 듀얼의 UI 간섭을 최소화하기 위해 순수 일러스트 영역만 크롭
         th, tw = template.shape
         art_roi = template[int(th*0.15):int(th*0.55), int(tw*0.15):int(tw*0.85)]
         
@@ -59,10 +54,8 @@ def recognize_hand_from_image(pil_image, main_ids, pics_dirs, expected_cards=5):
         if des_temp is None or len(kp_temp) == 0:
             continue
             
-        # knnMatch를 통해 가장 유사한 특징점 2개를 뽑아 비교
         matches = bf.knnMatch(des_temp, des_screen, k=2)
         
-        # Lowe's ratio test: 확실하게 매칭된 특징점만 필터링
         good_matches = []
         for m_n in matches:
             if len(m_n) == 2:
@@ -70,7 +63,6 @@ def recognize_hand_from_image(pil_image, main_ids, pics_dirs, expected_cards=5):
                 if m.distance < 0.75 * n.distance:
                     good_matches.append(m)
         
-        # 확실한 특징점이 3개 이상 잡히면 카드 존재 확인
         if len(good_matches) >= 3:
             x_coords = [kp_screen[m.trainIdx].pt[0] for m in good_matches]
             x_coords.sort()
@@ -78,7 +70,8 @@ def recognize_hand_from_image(pil_image, main_ids, pics_dirs, expected_cards=5):
             clusters = []
             current_cluster = [x_coords[0]]
             for x in x_coords[1:]:
-                if x - current_cluster[-1] < 80:
+                # 패가 많아지면 간격이 좁아지므로 군집화 거리를 70픽셀로 약간 타이트하게 조정
+                if x - current_cluster[-1] < 70:
                     current_cluster.append(x)
                 else:
                     clusters.append(current_cluster)
