@@ -1,5 +1,5 @@
 """
-Tkinter GUI for the Branded combo recommender v5.5
+Tkinter GUI for the Branded combo recommender v6
 """
 from __future__ import annotations
 
@@ -16,11 +16,11 @@ except Exception:
     Image = None
     ImageTk = None
 
-# 버전 5.5 엔진 임포트
+# 버전 5.6 엔진 임포트
 try:
-    from branded_combo_engine_v5_5 import load_data, load_ydk, recommend, split_card_lines, normalize
+    from branded_combo_engine_v6 import load_data, load_ydk, recommend, split_card_lines, normalize
 except Exception as e:
-    raise SystemExit(f"branded_combo_engine_v5_5.py 파일을 같은 폴더에 두세요. Import error: {e}")
+    raise SystemExit(f"branded_combo_engine_v6.py 파일을 같은 폴더에 두세요. Import error: {e}")
 
 APP_DIR = Path(__file__).resolve().parent
 CARD_W = 92
@@ -54,11 +54,10 @@ class ToolTip:
             self.tw.destroy()
             self.tw = None
 
-
 class BrandedComboApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("낙인 전개 추천기 v5.5")
+        self.title("낙인 전개 추천기 v6")
         self.geometry("1240x820")
         self.data = []
         self.deck = None
@@ -90,7 +89,7 @@ class BrandedComboApp(tk.Tk):
         root = ttk.Frame(self, padding=14)
         root.pack(fill="both", expand=True)
 
-        ttk.Label(root, text="낙인 전개 추천기 v5.5", style="Title.TLabel").pack(anchor="w", pady=(0, 10))
+        ttk.Label(root, text="낙인 전개 추천기 v6", style="Title.TLabel").pack(anchor="w", pady=(0, 10))
 
         paned = ttk.PanedWindow(root, orient=tk.HORIZONTAL)
         paned.pack(fill="both", expand=True)
@@ -124,7 +123,6 @@ class BrandedComboApp(tk.Tk):
 
         hand_header_row = ttk.Frame(parent, style="Card.TFrame")
         hand_header_row.pack(fill="x", pady=(0, 4))
-        # UI 텍스트 수정
         ttk.Label(hand_header_row, text="2. 현재 패 입력 (최대 9장)", style="CardTitle.TLabel").pack(side="left")
         ttk.Button(hand_header_row, text="클립보드 인식 (베타)", command=self._process_clipboard_image).pack(side="right")
         ttk.Button(hand_header_row, text="무작위 5장 뽑기", command=self._draw_random_hand).pack(side="right", padx=(0, 5))
@@ -241,7 +239,7 @@ class BrandedComboApp(tk.Tk):
             messagebox.showwarning("카드 부족", "메인 덱에 인식된 카드가 5장 미만입니다. CDB 연동을 확인하세요.")
             return
             
-        sampled = random.sample(valid_cards, 5) # 무작위 뽑기는 여전히 스탠다드인 5장을 유지합니다
+        sampled = random.sample(valid_cards, 5)
         self.hand_text.delete("1.0", "end")
         self.hand_text.insert("1.0", "\n".join(sampled))
 
@@ -291,7 +289,7 @@ class BrandedComboApp(tk.Tk):
         self.update()
 
         try:
-            matched_ids = screen_reader.recognize_hand_from_image(pil_image, main_ids, self.pics_dirs) # 기본값 최대 9장 사용
+            matched_ids = screen_reader.recognize_hand_from_image(pil_image, main_ids, self.pics_dirs)
             
             if not matched_ids:
                 messagebox.showinfo("결과 없음", "이미지에서 일치하는 카드를 찾지 못했습니다.\n캡처 구역이 정확한지 혹은 pics 매핑을 확인하세요.")
@@ -303,7 +301,6 @@ class BrandedComboApp(tk.Tk):
                 found_name = self.deck.full_db.get(str(cid), f"UNKNOWN:{cid}")
                 matched_names.append(found_name)
             
-            # 최소 5장 패딩 로직 유지 (9장까지 인식되면 모두 표기)
             while len(matched_names) < 5:
                 matched_names.append("인식불가 (수동수정)")
                 
@@ -322,7 +319,6 @@ class BrandedComboApp(tk.Tk):
 
         hand = split_card_lines(self.hand_text.get("1.0", "end"))
         
-        # 5장 제한 경고 로직을 완화
         if len(hand) < 1:
             messagebox.showwarning("패 확인", "패를 1장 이상 입력해주세요.")
             return
@@ -330,8 +326,9 @@ class BrandedComboApp(tk.Tk):
             if not messagebox.askyesno("패 확인", f"패가 {len(hand)}장만 입력되었습니다. 이대로 진행할까요?"):
                 return
 
+        # 5.6 버전 엔진에 name_to_data 추가 파라미터 전달
         valid_recs, failed_recs = recommend(
-            self.data, hand, self.deck.main_names, self.deck.extra_names,
+            self.data, hand, self.deck.main_names, self.deck.name_to_data, self.deck.extra_names,
             top_n=self.top_var.get(),
             prioritize_lock=self.tag_lock.get(),
             prioritize_cont=self.tag_cont.get(),
@@ -357,7 +354,7 @@ class BrandedComboApp(tk.Tk):
                 fail_text += f"■ {combo_name}\n  -> {', '.join(reasons)}\n\n"
                 
             self.detail.insert("1.0", fail_text)
-            messagebox.showinfo("결과 없음", "가능한 전개가 없습니다. 우측 상세 창에서 누락된 덱 파츠 사유를 확인하세요.")
+            messagebox.showinfo("결과 없음", "가능한 전개가 없습니다. 우측 상세 창에서 누락된 파츠 사유를 확인하세요.")
             return
 
         for i, rec in enumerate(self.recommendations, 1):
@@ -391,9 +388,17 @@ class BrandedComboApp(tk.Tk):
         for w in self.visual_inner.winfo_children(): w.destroy()
         self._photo_refs.clear()
 
+        # 고정 파츠 노출
         for name, count in c.get("필요한 파츠", {}).items():
             self._make_visual_card(name, f"필요 파츠\n({count}장)").pack(side="left", padx=5)
             
+        # 조건부 파츠 노출 (신규)
+        for cond in c.get("조건부 필요 파츠", []):
+            desc = cond.get("설명", "조건부 카드")
+            count = cond.get("수량", 1)
+            self._make_visual_placeholder(f"{desc}\n({count}장)").pack(side="left", padx=5)
+            
+        # 추가 코스트 노출
         if rec.cost > 0:
             for _ in range(rec.cost):
                 self._make_visual_placeholder("추가 코스트\n(1장)").pack(side="left", padx=5)
