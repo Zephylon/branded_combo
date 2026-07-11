@@ -22,6 +22,7 @@
 틈틈히 수정해나갈 수 있지만, 업데이트가 오래 이루어지지 않을 수도 있습니다. 
 
 # 설치해야 하는 라이브러리 및 설명
+이 프로그램은 Python 환경에서 동작하며, 이미지 인식 및 처리를 위해 아래의 외부 라이브러리 설치가 필요합니다.
 ### 라이브러리 상세 설명
 - opencv-python (cv2): 캡처한 패 영역의 이미지를 SIFT 알고리즘으로 분석하고 특징점을 추출하여 카드를 식별하는 핵심 컴퓨터 비전 라이브러리입니다.
 - numpy (numpy): 이미지 데이터를 고속으로 연산하고, 윈도우 환경의 '한글 경로명 인식 오류'를 우회하여 이미지를 디코딩하는 데 사용됩니다.
@@ -33,4 +34,4 @@ pip install opencv-python numpy pillow
 ```
 # 출처
 모든 전개 방법은 아래 스프레드 시트에서 가져왔음을 알립니다. 과거에 작성된 시트이기 때문에 현재로는 가짓수도, 전개도 조금 부족할 수 있지만 많은 양질의 자료를 담고있기 때문에 사용했습니다. 
-https://docs.google.com/spreadsheets/d/1wAd11bAIHfDxNm4xgZsI5XTuI_iaBx3CoWjVRN3LirY/edit?gid=1654946768#gid=1654946768
+* [낙인 전개 스프레드시트 링크](https://docs.google.com/spreadsheets/d/1wAd11bAIHfDxNm4xgZsI5XTuI_iaBx3CoWjVRN3LirY/edit?gid=1654946768#gid=1654946768)
