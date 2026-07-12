@@ -1,0 +1,11 @@
+{
+  "version": "6.2",
+  "changelog": "- 덱 편집기 이미지 보이는 기능 추가\n- 인터페이스 일부 조정",
+  "base_url": "https://raw.githubusercontent.com/Zephylon/branded_combo/main/",
+  "files": [
+    "branded_combo_engine.py",
+    "branded_deck_editor.py",
+    "branded_combo_gui.py",
+    "screen_reader.py"
+  ]
+}
