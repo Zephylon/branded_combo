@@ -1,5 +1,5 @@
 """
-Branded combo recommendation engine v6
+Branded combo recommendation engine v6.1 
 """
 from __future__ import annotations
 
@@ -12,10 +12,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Sequence
 
-# CDB 비트마스크 상수
+# CDB 비트마스크 상수 (필드 마법 값을 0x80000으로 수정)
 TYPE_MONSTER = 0x1
 TYPE_SPELL = 0x2
 TYPE_TRAP = 0x4
+TYPE_FIELD = 0x80000 
+TYPE_FUSION = 0x40
+TYPE_SYNCHRO = 0x2000
+TYPE_XYZ = 0x800000
+TYPE_LINK = 0x4000000
+TYPE_EXTRA = TYPE_FUSION | TYPE_SYNCHRO | TYPE_XYZ | TYPE_LINK
 
 RACE_MAP = {
     "전사족": 0x1, "마법사족": 0x2, "천사족": 0x4, "악마족": 0x8, 
@@ -98,6 +104,7 @@ class YdkDeck:
     unresolved_ids: List[str]
     full_db: Dict[str, str] = field(default_factory=dict)
     name_to_data: Dict[str, dict] = field(default_factory=dict)
+    id_to_data: Dict[str, dict] = field(default_factory=dict) # GUI 분석을 위해 개방
 
 def parse_ydk_entries(path: str | Path) -> List[YdkEntry]:
     entries: List[YdkEntry] = []
@@ -129,7 +136,7 @@ def load_db_from_cdb(cdb_path: str | Path) -> Dict[str, dict]:
                 name = texts.get(cid, "")
                 if name:
                     norm_cid = normalize_passcode(cid)
-                    data = {"name": name, "type": r[1], "race": r[2], "setcode": r[3]}
+                    data = {"name": name, "type": r[1], "race": r[2], "setcode": r[3], "id": cid}
                     mapping[norm_cid] = data
                     mapping[cid] = data
         con.close()
@@ -173,7 +180,6 @@ def load_ydk(path: str | Path, data: list, cdb_paths: Optional[Sequence[str | Pa
     unresolved = []
     name_to_data = {}
     
-    # name_to_data 매핑 생성 (카드 데이터를 이름으로 검색할 수 있게 만듦)
     for cid, cdata in id_to_data.items():
         c_name = canonicalize_card(cdata["name"], name_index)
         name_to_data[c_name] = cdata
@@ -202,7 +208,8 @@ def load_ydk(path: str | Path, data: list, cdb_paths: Optional[Sequence[str | Pa
         main_names=resolve(main_e), extra_names=resolve(extra_e), side_names=resolve(side_e),
         unresolved_ids=unresolved,
         full_db=full_db_names,
-        name_to_data=name_to_data
+        name_to_data=name_to_data,
+        id_to_data=id_to_data
     )
 
 @dataclass
@@ -220,7 +227,7 @@ def recommend(
     data: list,
     hand: Iterable[str],
     main_deck: Iterable[str],
-    name_to_data: Dict[str, dict], # YDK에서 가져온 카드 상세 정보
+    name_to_data: Dict[str, dict],
     extra_deck: Iterable[str] = (),
     top_n: int = 5,
     prioritize_lock: bool = False,
@@ -257,7 +264,6 @@ def recommend(
         if exclude_old and "구식" in tags:
             continue
 
-        # 1. 고정된 파츠 소모 검사
         available_hand = hand_list[:]
         required_hand = combo.get("필요한 파츠", {})
         
@@ -266,7 +272,6 @@ def recommend(
             if get_count(hand_counter, c_name) < req_cnt:
                 reasons.append(f"패 부족: {req_name}({req_cnt}장 필요)")
             else:
-                # 조건부 파츠 연산을 위해 사용된 카드는 남은 패에서 제거
                 for _ in range(req_cnt):
                     if c_name == albaz_name and albaz_name != white_albaz_name:
                         if albaz_name in available_hand: available_hand.remove(albaz_name)
@@ -274,7 +279,6 @@ def recommend(
                     else:
                         if c_name in available_hand: available_hand.remove(c_name)
 
-        # 2. 조건부 필요 파츠 검사 (신규 기능)
         conditional_parts = combo.get("조건부 필요 파츠", [])
         for cond in conditional_parts:
             desc = cond.get("설명", "조건부 카드")
@@ -316,7 +320,6 @@ def recommend(
             if matched_count < req_cnt:
                 reasons.append(f"패 부족 (조건부): {desc}({req_cnt}장 필요)")
 
-        # 3. 덱 파츠 검사
         req_main = combo.get("전개 중 필요한 메인 덱 카드", {})
         for req_name, req_cnt in req_main.items():
             c_name = canonicalize_card(req_name, name_index)
@@ -337,7 +340,6 @@ def recommend(
             if available < req_cnt:
                 reasons.append(f"호감 파츠 패에 잡힘: {req_name}(덱 잔여 {available}장, 필요 {req_cnt}장)")
 
-        # 4. 추가 코스트 검사
         cost = int(combo.get("추가 소모패", 0))
         cond_cnt = sum(c.get("수량", 1) for c in conditional_parts)
         total_needed_hand_cards = sum(required_hand.values()) + cond_cnt + cost
